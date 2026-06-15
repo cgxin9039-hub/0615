@@ -1,88 +1,400 @@
-import pandas as pd
-import time
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYS_TERMINAL // 台灣空氣汙染分析專案</title>
+    <style>
+        /* 基礎設定與重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-def get_aqi_data(url):
-    """下載並解析空氣品質資料"""
-    try:
-        # 環境部 API 的 CSV 格式編碼為 UTF-8
-        df = pd.read_csv(url, encoding='utf-8')
-        return df
-    except Exception as e:
-        print(f"❌ 無法連線網路或下載資料。錯誤訊息: {e}")
-        return None
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-purple: #bc13fe;
+            --dark-bg: #050914;
+            --glass-bg: rgba(5, 9, 20, 0.6);
+            --text-main: #e0f7fa;
+            --text-muted: #8ab4f8;
+        }
 
-def query_aqi():
-    # 開放資料 API URL
-    url = 'https://data.moenv.gov.tw/api/v2/aqx_p_432?api_key=e75b1660-e564-4107-aad5-a8be1f905dd9&limit=1000&sort=ImportDate%20desc&format=CSV'
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--dark-bg);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
 
-    column_mapping = {
-        'sitename': '測站名稱',
-        'county': '縣市',
-        'aqi': '空氣品質指標(AQI)',
-        'pollutant': '主要污染物',
-        'status': '狀態',
-        'publishtime': '資料更新時間'
-    }
+        /* 背景畫布 (星空動畫) */
+        #starfield {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            background: linear-gradient(to bottom, #02040a, #0a1128);
+        }
 
-    # 進入可重複執行的主互動迴圈
-    while True:
-        print("\n" + "="*50)
-        print("【台灣空氣品質即時查詢系統】")
-        print(" 1. 輸入縣市名稱進行查詢 (每次查詢皆會自動連網更新)")
-        print(" 2. 輸入 [q] 或 [quit] 結束程式")
-        print("="*50)
+        /* 版面配置 */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
 
-        user_input = input("👉 請輸入欲查詢的縣市，或輸入 q 離開: ").strip()
+        /* 標題區塊 */
+        header {
+            text-align: center;
+            padding: 4rem 0 3rem;
+            border-bottom: 1px solid rgba(0, 243, 255, 0.3);
+            margin-bottom: 3rem;
+            position: relative;
+        }
 
-        # 檢查是否退出
-        if user_input.lower() in ['q', 'quit']:
-            print("👋 感謝使用，程式即將結束。")
-            time.sleep(1) # 稍微暫停讓使用者看見提示
-            break
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            height: 3px;
+            background: var(--neon-blue);
+            box-shadow: 0 0 10px var(--neon-blue);
+        }
 
-        if not user_input:
-            print("⚠️ 輸入不能為空，請重新輸入。")
-            continue
+        .sys-label {
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--neon-purple);
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            margin-bottom: 1rem;
+            display: block;
+            text-transform: uppercase;
+        }
 
-        # 💡 重點優化：每次使用者輸入時，才即時連網下載最新的空氣品質資料
-        print("🔄 正在連線環境部取得最新空氣品質資料...")
-        df_all = get_aqi_data(url)
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #ffffff;
+            text-shadow: 0 0 10px var(--neon-blue), 0 0 20px var(--neon-blue);
+            letter-spacing: 2px;
+            margin-bottom: 1rem;
+        }
 
-        if df_all is None or df_all.empty:
-            print("❌ 未能成功取得網路資料，請確認網路是否連線，並重新嘗試。")
-            continue
+        .subtitle {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+        }
 
-        # 檢查 API 欄位
-        available_cols = [col for col in column_mapping.keys() if col in df_all.columns]
-        if not available_cols:
-            print("❌ API 欄位異常，請檢查 API URL 是否失效。")
-            continue
+        /* 內容區塊 (玻璃擬物風格) */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            border-radius: 15px;
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            box-shadow: inset 0 0 20px rgba(0, 243, 255, 0.05),
+                        0 10px 30px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
 
-        df_clean = df_all[available_cols].copy()
-        df_clean['county'] = df_clean['county'].astype(str)
+        .glass-panel:hover {
+            border-color: rgba(0, 243, 255, 0.6);
+            transform: translateY(-5px);
+        }
 
-        # 支援「台」與「臺」自動轉換模糊搜尋
-        search_keyword = user_input.replace('台', '[台臺]').replace('臺', '[台臺]')
-        filtered_df = df_clean[df_clean['county'].str.contains(search_keyword, case=False, na=False)]
+        .panel-title {
+            color: var(--neon-blue);
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+        }
 
-        if filtered_df.empty:
-            print(f"ℹ️ 找不到包含 '{user_input}' 的縣市資料，請重新輸入（例如：台北、高雄）。")
-            continue
+        .panel-title::before {
+            content: '>';
+            margin-right: 10px;
+            color: var(--neon-purple);
+            font-family: 'Courier New', Courier, monospace;
+            animation: blink 1s infinite;
+        }
 
-        # 重新命名欄位並重設索引
-        result_df = filtered_df.rename(columns=column_mapping).reset_index(drop=True)
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
 
-        print(f"\n🔍 篩選後的空氣品質資料（關鍵字: {user_input}）：")
-        print(result_df.to_string())
+        /* 網格佈局 */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
 
-        # 查詢完畢後提示，方便重複使用
-        print("\n💡 查詢完畢。您可以繼續輸入其他縣市進行下一次即時查詢。")
+        /* 條列項目 */
+        ul.tech-list {
+            list-style: none;
+        }
 
-if __name__ == "__main__":
-    try:
-        query_aqi()
-    except Exception as e:
-        print(f"\n💥 程式運作時發生嚴重錯誤: {e}")
-        print("請聯絡開發者或檢查網路連線。")
-        print("\n" + "="*50)
-        input("【防閃退提示】請按任意鍵退出... ")
+        ul.tech-list li {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+
+        ul.tech-list li::before {
+            content: '■';
+            color: var(--neon-blue);
+            font-size: 0.8rem;
+            position: absolute;
+            left: 0;
+            top: 5px;
+        }
+
+        /* 執行檔按鈕區塊 */
+        .action-section {
+            text-align: center;
+            padding: 4rem 0;
+        }
+
+        .exe-btn {
+            display: inline-block;
+            background: transparent;
+            color: var(--neon-blue);
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-decoration: none;
+            padding: 15px 40px;
+            border: 2px solid var(--neon-blue);
+            border-radius: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2), 
+                        inset 0 0 15px rgba(0, 243, 255, 0.2);
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .exe-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.4), transparent);
+            transition: all 0.5s ease;
+        }
+
+        .exe-btn:hover {
+            background: rgba(0, 243, 255, 0.1);
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.6), 
+                        inset 0 0 20px rgba(0, 243, 255, 0.4);
+            color: #fff;
+        }
+
+        .exe-btn:hover::before {
+            left: 100%;
+        }
+
+        /* 裝飾性代碼元素 */
+        .decor-code {
+            position: absolute;
+            font-family: 'Courier New', Courier, monospace;
+            color: rgba(255,255,255,0.05);
+            font-size: 14vw;
+            font-weight: 900;
+            top: 10%;
+            left: -5%;
+            z-index: -1;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        /* RWD 響應式設定 */
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            h1 {
+                font-size: 2.2rem;
+            }
+            .container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 星空背景畫布 -->
+    <canvas id="starfield"></canvas>
+
+    <!-- 裝飾文字 -->
+    <div class="decor-code">PM2.5</div>
+
+    <div class="container">
+        <header>
+            <span class="sys-label">Term Project v2.0.4 // Status: Online</span>
+            <h1>穹頂之下：台灣空氣汙染解析</h1>
+            <p class="subtitle">高中生期末專題 ── 數據視覺化與環境影響評估</p>
+        </header>
+
+        <main>
+            <!-- 專案簡介 -->
+            <section class="glass-panel">
+                <h2 class="panel-title">專案概述 PROJECT_OVERVIEW</h2>
+                <p>
+                    台灣的空氣汙染問題是長期影響國民健康與生活品質的重要環境指標。本專題旨在探討台灣特有的空汙成因，包含<strong>地形限制、季風影響、工業排放以及境外移入</strong>等多重變數。
+                    透過蒐集環境部環境資料開放平臺的即時與歷史數據，我們建構了一個視覺化分析模型，協助大眾更直觀地理解 PM2.5、AQI (空氣品質指標) 數值的意義與分佈。
+                </p>
+                <br>
+                <p>
+                    本研究不僅停留在數據分析，更進一步探討空汙對公眾健康的潛在威脅，並提出微觀至宏觀層面的改善建議，期望喚起社會對永續環境的重視。
+                </p>
+            </section>
+
+            <div class="grid-2">
+                <!-- 核心成因分析 -->
+                <section class="glass-panel">
+                    <h2 class="panel-title">核心成因 ANALYSIS_ROOT</h2>
+                    <ul class="tech-list">
+                        <li><strong>地理與氣象條件：</strong> 中央山脈阻擋導致中南部秋冬季處於背風面，擴散條件極差。</li>
+                        <li><strong>境內汙染源：</strong> 包含火力發電廠、石化工業區等固定汙染源，以及汽機車排放之移動汙染源。</li>
+                        <li><strong>境外汙染移入：</strong> 東北季風常挾帶鄰近地區的霾害與懸浮微粒移入台灣。</li>
+                        <li><strong>衍生性汙染：</strong> VOCs 與氮氧化物在陽光照射下產生的光化學煙霧（如臭氧汙染）。</li>
+                    </ul>
+                </section>
+
+                <!-- 系統特點 -->
+                <section class="glass-panel">
+                    <h2 class="panel-title">系統功能 SYS_FEATURES</h2>
+                    <ul class="tech-list">
+                        <li>即時 API 數據對接 (環境部開放資料)</li>
+                        <li>台灣各縣市 AQI 數據熱力圖視覺化</li>
+                        <li>歷史空汙趨勢交叉比對圖表</li>
+                        <li>汙染源比例動態分析儀表板</li>
+                        <li>健康防護等級預警系統</li>
+                    </ul>
+                </section>
+            </div>
+
+            <!-- 執行檔下載 / 啟動按鈕區 -->
+            <section class="action-section">
+                <p class="sys-label" style="margin-bottom: 2rem;">>> 點擊下方按鈕以啟動分析模組</p>
+                <a href="#" class="exe-btn" onclick="startSystem(event)">
+                    [ 啟動專案執行檔_Start.exe ]
+                </a>
+            </section>
+        </main>
+    </div>
+
+    <!-- JavaScript 動畫與互動 -->
+    <script>
+        /* 星空動畫邏輯 */
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let stars = [];
+
+        // 初始化畫布尺寸
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            initStars();
+        }
+
+        // 星星物件
+        class Star {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.size = Math.random() * 2 + 0.1;
+                this.speed = Math.random() * 0.5 + 0.1;
+                this.opacity = Math.random();
+                this.fadeDir = Math.random() > 0.5 ? 1 : -1;
+            }
+
+            update() {
+                // 星星緩慢向上移動 (模擬微小粒子)
+                this.y -= this.speed;
+                if (this.y < 0) {
+                    this.y = height;
+                    this.x = Math.random() * width;
+                }
+
+                // 閃爍效果
+                this.opacity += 0.01 * this.fadeDir;
+                if (this.opacity >= 1 || this.opacity <= 0.1) {
+                    this.fadeDir *= -1;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(0, 243, 255, ${this.opacity})`;
+                ctx.fill();
+            }
+        }
+
+        function initStars() {
+            stars = [];
+            // 根據螢幕寬度決定星星數量
+            const numStars = Math.floor((width * height) / 4000);
+            for (let i = 0; i < numStars; i++) {
+                stars.push(new Star());
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            stars.forEach(star => {
+                star.update();
+                star.draw();
+            });
+            requestAnimationFrame(animate);
+        }
+
+        // 綁定事件與啟動動畫
+        window.addEventListener('resize', resize);
+        resize();
+        animate();
+
+        /* 按鈕點擊互動模擬 */
+        function startSystem(e) {
+            e.preventDefault();
+            const btn = e.target;
+            const originalText = btn.innerText;
+            
+            btn.innerText = "[ 系統初始化中... 載入數據... ]";
+            btn.style.color = "#bc13fe";
+            btn.style.borderColor = "#bc13fe";
+            btn.style.boxShadow = "0 0 20px rgba(188, 19, 254, 0.6)";
+            
+            // 模擬進度延遲
+            setTimeout(() => {
+                alert(">> 系統權限確認。\n>> 正在解壓縮台灣空汙分析模型與資料庫...\n\n(這是一個期末專題的模擬執行動作，您可以將此按鈕連結至實際的專案檔案或報告！)");
+                // 恢復原本狀態
+                btn.innerText = originalText;
+                btn.style.color = "";
+                btn.style.borderColor = "";
+                btn.style.boxShadow = "";
+            }, 1500);
+        }
+    </script>
+</body>
+</html>
