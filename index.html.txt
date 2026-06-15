@@ -295,7 +295,7 @@
             <!-- 執行檔下載 / 啟動按鈕區 -->
             <section class="action-section">
                 <p class="sys-label" style="margin-bottom: 2rem;">>> 點擊下方按鈕以啟動分析模組</p>
-                <a href="#" class="exe-btn" onclick="startSystem(event)">
+                <a href="#" class="exe-btn" onclick="window.location.href='111.exe'">
                     [ 啟動專案執行檔_Start.exe ]
                 </a>
             </section>
